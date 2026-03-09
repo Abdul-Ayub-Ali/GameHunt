@@ -1,45 +1,72 @@
 const game = (selector) => document.querySelector(selector);
+
 const board = game(".board");
 const btnStart = game(".btn-start");
 const modal = game(".modal");
 const startGame = game(".start-game");
 const gameOver = game(".game-over");
 const restartBtn = game(".btn-restart");
+
 const highScore = game(".high-score");
 const score = game(".score");
 const Time = game(".time");
 
-const blockHeight = 50;
-const blockWidth = 50;
+const blockSize = 50;
+
+let columns;
+let rows;
+
+let blocks = {};
+
+let snake;
+let direction;
+let currentDirection;
+
+let food;
+
+let intervalId;
+let timerInterval;
+
+let seconds;
+let scoreValue;
 
 let highScoreValue = localStorage.getItem("snakeHighScore") || 0;
-let scoreValue = 0;
 
-highScore.textContent = highScoreValue;
+if (highScore) highScore.textContent = highScoreValue;
 
-let seconds = 0;
-let timerInterval = null;
 
-const columns = Math.floor(board.clientWidth / blockWidth);
-const rows = Math.floor(board.clientHeight / blockHeight);
 
-const blocks = [];
+/* CREATE BOARD */
 
-let intervalId = null;
+function createBoard() {
 
-let food = {
-  x: Math.floor(Math.random() * rows),
-  y: Math.floor(Math.random() * columns),
-};
+  columns = Math.floor(board.clientWidth / blockSize);
+  rows = Math.floor(board.clientHeight / blockSize);
 
-const snake = [{ x: 1, y: 3 }];
+  board.innerHTML = "";
+  blocks = {};
 
-let directions = "down";
-let currentDirection = "down";
+  for (let r = 0; r < rows; r++) {
 
-/* TIMER FUNCTIONS */
+    for (let c = 0; c < columns; c++) {
+
+      const block = document.createElement("div");
+      block.classList.add("block");
+
+      board.appendChild(block);
+
+      blocks[`${r}-${c}`] = block;
+
+    }
+  }
+}
+
+
+
+/* TIMER */
 
 function startTimer() {
+
   timerInterval = setInterval(() => {
 
     seconds++;
@@ -50,77 +77,89 @@ function startTimer() {
     mins = mins < 10 ? "0" + mins : mins;
     secs = secs < 10 ? "0" + secs : secs;
 
-    Time.textContent = `${mins}:${secs}`;
+    if (Time) Time.textContent = `${mins}:${secs}`;
 
   }, 1000);
+
 }
 
 function stopTimer() {
+
   clearInterval(timerInterval);
+
 }
 
-/* CREATE BOARD */
 
-for (let row = 0; row < rows; row++) {
-  for (let col = 0; col < columns; col++) {
-    const block = document.createElement("div");
-    block.classList.add("block");
 
-    board.appendChild(block);
+/* SPAWN FOOD */
 
-    blocks[`${row}-${col}`] = block;
+function spawnFood() {
+
+  if (food) {
+
+    blocks[`${food.x}-${food.y}`].classList.remove("food");
+
   }
+
+  while (true) {
+
+    let x = Math.floor(Math.random() * rows);
+    let y = Math.floor(Math.random() * columns);
+
+    let collision = snake.some(seg => seg.x === x && seg.y === y);
+
+    if (!collision) {
+
+      food = { x, y };
+
+      blocks[`${x}-${y}`].classList.add("food");
+
+      break;
+
+    }
+
+  }
+
 }
 
-const renderSnake = () => {
 
-  let head = null;
 
-  blocks[`${food.x}-${food.y}`].classList.add("food");
+/* GAME LOOP */
 
-  if (directions === "left") {
-    head = { x: snake[0].x, y: snake[0].y - 1 };
-  } 
-  else if (directions === "right") {
-    head = { x: snake[0].x, y: snake[0].y + 1 };
-  } 
-  else if (directions === "up") {
-    head = { x: snake[0].x - 1, y: snake[0].y };
-  } 
-  else if (directions === "down") {
-    head = { x: snake[0].x + 1, y: snake[0].y };
-  }
+function renderSnake() {
 
-  /* GAME OVER */
+  let head = { ...snake[0] };
+
+  if (direction === "left") head.y--;
+  if (direction === "right") head.y++;
+  if (direction === "up") head.x--;
+  if (direction === "down") head.x++;
+
+
+
+  /* WALL COLLISION */
 
   if (head.x < 0 || head.x >= rows || head.y < 0 || head.y >= columns) {
 
-    clearInterval(intervalId);
-    stopTimer();
+    return endGame();
 
-    if (scoreValue > highScoreValue) {
-
-      highScoreValue = scoreValue;
-
-      localStorage.setItem("snakeHighScore", highScoreValue);
-
-      highScore.textContent = highScoreValue;
-    }
-
-    modal.style.display = "flex";
-    startGame.style.display = "none";
-    gameOver.style.display = "flex";
-
-    snake.length = 0;
-
-    return;
   }
 
-  snake.forEach((segment) => {
-    blocks[`${segment.x}-${segment.y}`].classList.remove("fill");
-  });
+
+
+  /* SELF COLLISION */
+
+  if (snake.some(seg => seg.x === head.x && seg.y === head.y)) {
+
+    return endGame();
+
+  }
+
+
 
   snake.unshift(head);
+
+
 
   /* FOOD EAT */
 
@@ -128,109 +167,132 @@ const renderSnake = () => {
 
     scoreValue += 10;
 
-    score.textContent = scoreValue;
+    if (score) score.textContent = scoreValue;
 
-    blocks[`${food.x}-${food.y}`].classList.remove("food");
-
-    food = {
-      x: Math.floor(Math.random() * rows),
-      y: Math.floor(Math.random() * columns),
-    };
-
-    snake.push(snake[snake.length - 1]);
-
-  } else {
-
-    snake.pop();
+    spawnFood();
 
   }
 
-  snake.forEach((segment) => {
-    blocks[`${segment.x}-${segment.y}`].classList.add("fill");
+  else {
+
+    let tail = snake.pop();
+
+    blocks[`${tail.x}-${tail.y}`].classList.remove("fill");
+
+  }
+
+
+
+  blocks[`${head.x}-${head.y}`].classList.add("fill");
+
+
+
+  currentDirection = direction;
+
+}
+
+
+
+/* GAME OVER */
+
+function endGame() {
+
+  clearInterval(intervalId);
+  stopTimer();
+
+  if (scoreValue > highScoreValue) {
+
+    highScoreValue = scoreValue;
+
+    localStorage.setItem("snakeHighScore", highScoreValue);
+
+    if (highScore) highScore.textContent = highScoreValue;
+
+  }
+
+  modal.style.display = "flex";
+  startGame.style.display = "none";
+  gameOver.style.display = "flex";
+
+}
+
+
+
+/* RESET GAME */
+
+function resetGame() {
+
+  clearInterval(intervalId);
+  stopTimer();
+
+  document.querySelectorAll(".block").forEach(b => {
+
+    b.classList.remove("fill");
+    b.classList.remove("food");
+
   });
 
-  currentDirection = directions;
-};
+  snake = [{ x: 3, y: 3 }];
 
-/* START GAME */
+  direction = "right";
+  currentDirection = "right";
+
+  seconds = 0;
+  scoreValue = 0;
+
+  if (score) score.textContent = 0;
+  if (Time) Time.textContent = "00:00";
+
+  spawnFood();
+
+  startTimer();
+
+  intervalId = setInterval(renderSnake, 250);
+
+}
+
+
+
+/* START BUTTON */
 
 btnStart.addEventListener("click", () => {
 
   modal.style.display = "none";
 
-  clearInterval(intervalId);
-
-  seconds = 0;
-  scoreValue = 0;
-
-  score.textContent = 0;
-  Time.textContent = "00:00";
-
-  startTimer();
-
-  intervalId = setInterval(() => {
-    renderSnake();
-  }, 400);
+  resetGame();
 
 });
 
-/* RESTART GAME */
 
-restartBtn.addEventListener("click", restartGame);
 
-function restartGame() {
+/* RESTART BUTTON */
 
-  clearInterval(intervalId);
-  stopTimer();
-
-  document.querySelectorAll(".block").forEach((block) => {
-    block.classList.remove("fill");
-    block.classList.remove("food");
-  });
-
-  snake.length = 0;
-
-  snake.push({ x: 1, y: 3 });
-
-  directions = "down";
-  currentDirection = "down";
-
-  seconds = 0;
-  scoreValue = 0;
-
-  score.textContent = 0;
-  Time.textContent = "00:00";
-
-  food = {
-    x: Math.floor(Math.random() * rows),
-    y: Math.floor(Math.random() * columns),
-  };
+restartBtn.addEventListener("click", () => {
 
   modal.style.display = "none";
 
-  startTimer();
+  resetGame();
 
-  intervalId = setInterval(() => {
-    renderSnake();
-  }, 400);
+});
 
-}
+
 
 /* CONTROLS */
 
 addEventListener("keydown", (e) => {
 
-  if (e.key === "ArrowLeft" && currentDirection !== "right") {
-    directions = "left";
-  } 
-  else if (e.key === "ArrowRight" && currentDirection !== "left") {
-    directions = "right";
-  } 
-  else if (e.key === "ArrowUp" && currentDirection !== "down") {
-    directions = "up";
-  } 
-  else if (e.key === "ArrowDown" && currentDirection !== "up") {
-    directions = "down";
-  }
+  if (e.key === "ArrowLeft" && currentDirection !== "right") direction = "left";
+
+  else if (e.key === "ArrowRight" && currentDirection !== "left") direction = "right";
+
+  else if (e.key === "ArrowUp" && currentDirection !== "down") direction = "up";
+
+  else if (e.key === "ArrowDown" && currentDirection !== "up") direction = "down";
 
 });
+
+
+
+/* INIT */
+
+createBoard();
